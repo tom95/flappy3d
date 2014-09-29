@@ -15,6 +15,10 @@ import javax.microedition.khronos.egl.EGLConfig;
 
 public class SurfaceView extends GLSurfaceView {
 
+	private static float[] PLANE_VERTICES = { -0.5f, 0.0f, -0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.5f };
+	private static float[] PLANE_NORMALS = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f };
+	private static short[] PLANE_INDICES = { 2, 1, 0, 3, 2, 0 };
+
 	private Resources mResources;
 
 	public Object mPipe;
@@ -30,7 +34,7 @@ public class SurfaceView extends GLSurfaceView {
 
 	private float mPipeLocation = 0;
 
-	private long mLastTime;
+	// private long mLastTime;
 	private long mStartTime;
 
 	private int mWidth;
@@ -55,16 +59,18 @@ public class SurfaceView extends GLSurfaceView {
 			public int mDepthTexture;
 			public int mShadowBuffer;
 
+			/**
+			 * Basic configuration for the project, initializes data and sets constant GL pipeline states
+			 */
 			public void onSurfaceCreated(GL10 unused, EGLConfig config) {
 				GLES30.glClearColor(0.262745f, 0.823529f, 0.980392f, 1.0f);
 				GLES30.glEnable(GLES30.GL_DEPTH_TEST);
 				GLES30.glEnable(GLES30.GL_CULL_FACE);
 
+				// create buffers for shadow rendering
 				int[] textures = new int[1];
 				int[] framebuffers = new int[1];
-				int[] renderbuffers = new int[1];
 				GLES30.glGenTextures(1, textures, 0);
-				GLES30.glGenRenderbuffers(1, renderbuffers, 0);
 				GLES30.glGenFramebuffers(1, framebuffers, 0);
 
 				mDepthTexture = textures[0];
@@ -76,68 +82,60 @@ public class SurfaceView extends GLSurfaceView {
 				GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
 				GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
 				GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-				//GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA,
-					//SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
 				GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_DEPTH_COMPONENT,
 					SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION, 0, GLES30.GL_DEPTH_COMPONENT, GLES30.GL_UNSIGNED_INT, null);
-
-				//GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, renderbuffers[0]);
-				//GLES30.glRenderbufferStorage(GLES30.GL_RENDERBUFFER, GLES30.GL_COLOR_ATTACHMENT0, //GLES30.GL_DEPTH_COMPONENT16,
-					//SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION);
 
 				GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mShadowBuffer);
 				GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_DEPTH_ATTACHMENT,
 						GLES30.GL_TEXTURE_2D, mDepthTexture, 0);
-				//GLES30.glFramebufferRenderbuffer(GLES30.GL_FRAMEBUFFER, GLES30.GL_DEPTH_ATTACHMENT,
-						//GLES30.GL_RENDERBUFFER, renderbuffers[0]);
 
-				if (GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+				if (GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) != GLES30.GL_FRAMEBUFFER_COMPLETE)
 					Log.e("VERTICES", "Failed to assemble framebuffer!");
-				}
-
-				int err;
-				if ((err = GLES30.glGetError()) != GLES30.GL_NO_ERROR) {
-					Log.e("VERTICES", "Failed to create framebuffer: " + Integer.toString(err));
-				}
 
 				GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
-				GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, 0);
 				GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0);
 
+				// setup shadow/light matrices
 				Matrix.orthoM(mShadowProjection, 0, -SHADOW_WINDOW_SIZE, SHADOW_WINDOW_SIZE, -SHADOW_WINDOW_SIZE, SHADOW_WINDOW_SIZE,
 					-SHADOW_WINDOW_SIZE, SHADOW_WINDOW_SIZE);
 				Matrix.setLookAtM(mShadowView, 0, 0, 0, 0, lightDirection[0], lightDirection[1], lightDirection[2], 0, 1, 0);
 
+				// load default objects, like the pipe and a generic plane
 				mPipe = new Object(mResources.openRawResource(R.raw.pipe));
 				mPipe.setColor(1.0f, 0.415686f, 0.0f, 1.0f);
 
-				// float[] vertices = { -0.5f, 0, -0.5f, 0.5f, 0, -0.5f, 0.5f, 0, 0.5f, -0.5f, 0, 0.5f };
-				// float[] normals = { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
-				// short[] indices = { 0, 1, 2, 0, 2, 3 };
-				// mPlane = new Object(vertices, normals, indices);
-				mPlane = new Object(mResources.openRawResource(R.raw.plane));
+				mPlane = new Object(PLANE_VERTICES, PLANE_NORMALS, PLANE_INDICES);
+				//mPlane = new Object(mResources.openRawResource(R.raw.plane));
 				mPlane.setColor(0.717647f, 1.0f, 0.262745f, 1.0f);
 
+				// our own view matrix
 				Matrix.setLookAtM(mView, 0,
 					0, 5, -9,
 					0, 5, 0,
 					0, 1, 0);
 
-				mLastTime = mStartTime = System.nanoTime();
+				mStartTime = System.nanoTime();
+				// mLastTime = mStartTime;
 			}
 
+			/**
+			 * Main function for drawing, each frame is drawn here and logic is updated
+			 * TODO: move logic out into a separate function
+			 */
 			public void onDrawFrame(GL10 unused) {
 				long now = System.nanoTime();
-				float deltaTime = mLastTime - now;
-				mLastTime = now;
+				// float deltaTime = mLastTime - now;
+				// mLastTime = now;
 
 				float offsetX = (now - mStartTime) % 2000000000L / 1000000000.0f * 6.0f - 6.0f;
 
 				// shadow pass
-				if (!mShowLightBuffer)
+				if (!mShowLightBuffer) {
 					GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mShadowBuffer);
+					GLES30.glColorMask(false, false, false, false);
+				}
 
-				//GLES30.glCullFace(GLES30.GL_FRONT);
+				GLES30.glCullFace(GLES30.GL_FRONT);
 
 				GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
 				GLES30.glViewport(0, 0, SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION);
@@ -147,9 +145,8 @@ public class SurfaceView extends GLSurfaceView {
 					return;
 
 				GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
-				GLES30.glCullFace(GLES30.GL_BACK);
 
-				// main scene pass
+				// setup shadow matrix
 				mShadowMatrix[0] = 0.5f; mShadowMatrix[1] = 0.0f; mShadowMatrix[2] = 0.0f; mShadowMatrix[3] = 0.0f;
 				mShadowMatrix[4] = 0.0f; mShadowMatrix[5] = 0.5f; mShadowMatrix[6] = 0.0f; mShadowMatrix[7] = 0.0f;
 				mShadowMatrix[8] = 0.0f; mShadowMatrix[9] = 0.0f; mShadowMatrix[10] = 0.5f; mShadowMatrix[11] = 0.0f;
@@ -161,9 +158,12 @@ public class SurfaceView extends GLSurfaceView {
 				GLES30.glActiveTexture(GLES30.GL_TEXTURE5);
 				GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mDepthTexture);
 
+				// render main scene
+				GLES30.glColorMask(true, true, true, true);
 				GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
-
 				GLES30.glViewport(0, 0, mWidth, mHeight);
+				GLES30.glCullFace(GLES30.GL_BACK);
+
 				drawScene(ObjectShader.getDefault(), mProjection, mView, mShadowMatrix, offsetX);
 			}
 
